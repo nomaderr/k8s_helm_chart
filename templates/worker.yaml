@@ -1,0 +1,122 @@
+{{- range $Worker := .Values.workers }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: {{ include "Common.name" $ }}--worker-{{ $Worker.name }}
+    app.kubernetes.io/part-of: {{ include "Common.name" $ }}
+    helm.sh/chart: {{ include "Common.chart" $ }}
+    {{- range $Label, $Value := $.Values.labels }}
+    {{ $Label }}: {{ $Value | quote  }}
+    {{- end }}
+  name: {{ include "Common.name" $ }}--worker-{{ $Worker.name }}
+spec:
+  revisionHistoryLimit: {{ $.Values.worker.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "Common.name" $ }}--worker-{{ $Worker.name }}
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  replicas: {{ $Worker.replicaCount | default 1 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "Common.name" $ }}--worker-{{ $Worker.name }}
+        {{- range $Label, $Value := $.Values.labels }}
+        {{ $Label }}: {{ $Value | quote  }}
+        {{- end }}
+    spec:
+      {{- if $.Values.worker.useNodeDns }}
+      dnsPolicy: "ClusterFirst"
+      {{- end }}
+      {{- if $Worker.nodeSelector }}
+      nodeSelector:
+      {{- range $key, $value :=  $Worker.nodeSelector }}
+        {{ $key }}: {{ $value | quote }}
+      {{- end }}
+      {{- end }}
+      containers:
+        - image: "{{ $.Values.image.prefix }}{{ $.Values.image.separator }}{{ $.Values.worker.component }}:{{ $.Values.image.version }}"
+          name: {{ include "Common.name" $ }}--worker-{{ $Worker.name }}
+          args:
+{{ toYaml $Worker.args | indent 12 }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          {{- if $.Values.worker.lifecycle }}
+          lifecycle:
+{{ toYaml $.Values.worker.lifecycle.hooks | indent 12 }}
+          {{- end}}
+          {{- if $.Values.security.enabled }}
+          securityContext:
+            runAsNonRoot: {{ $.Values.security.runAsNonRoot }}
+            runAsUser: {{ $.Values.security.user }}
+            runAsGroup: {{ $.Values.security.group }}
+          {{- end}}
+          env:
+            {{- range $key, $value :=  $.Values.envs }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          ports:
+            - containerPort: {{ $Worker.containerPort }}
+              protocol: TCP
+              name: {{ $Worker.namePort }}
+          {{- if $.Values.secretEnvs }}
+          envFrom:
+            {{- range $.Values.secretEnvs }}
+            - secretRef:
+                name: {{ include "Common.name" $ }}--{{ .name | default "secret" }}
+                optional: {{ .isOptional | default false }}
+            {{- end }}
+          {{- end }}
+          resources:
+            {{- if $Worker.resources }}
+{{ toYaml $Worker.resources | indent 12 }}
+            {{- else }}
+            {{- if $.Values.worker.resources.limits }}
+            limits:
+{{ toYaml $.Values.worker.resources.limits | indent 14 }}
+            {{- end }}
+            {{- if $.Values.worker.resources.requests }}
+            requests:
+{{ toYaml $.Values.worker.resources.requests | indent 14 }}
+            {{- end }}
+            {{- end }}
+
+      ## InitContainers
+      {{- if $.Values.worker.initContainers }}
+      initContainers:
+        {{- range $initContainer := $.Values.worker.initContainers}}
+        - image: "{{ $.Values.image.prefix }}{{ $.Values.image.separator }}{{ $.Values.worker.component }}:{{ $.Values.image.version }}"
+          name: {{ $initContainer.name }}
+          command:
+            - "sh"
+            - "-c"
+          args: {{ $initContainer.args }}
+          env:
+            {{- range $key, $value :=  $.Values.envs }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+        {{- end }}
+
+          {{- if $.Values.secretEnvs }}
+          envFrom:
+            {{- range $.Values.secretEnvs }}
+            - secretRef:
+                name: {{ include "Common.name" $ }}--{{ .name | default "secret" }}
+                optional: {{ .isOptional | default false }}
+            {{- end }}
+          {{- end }}
+      {{- end }}
+
+      {{- if $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        - name: {{ $.Values.imagePullSecrets }}
+      {{- end }}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+  {{- end }}

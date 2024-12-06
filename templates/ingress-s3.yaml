@@ -1,0 +1,54 @@
+{{- if .Values.s3.enabled }}
+{{- with .Values.s3.ingress }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "Common.name" $ }}--client--ingress
+  labels:
+    app.kubernetes.io/name: {{ include "Common.name" $ }}--client--ingress
+    app.kubernetes.io/part-of: {{ include "Common.name" $ }}
+    helm.sh/chart: {{ include "Common.chart" $ }}
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    {{- if .forceSslRedirect }}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- end }}
+    nginx.ingress.kubernetes.io/rewrite-target: /{{ .projectName }}/{{ .folderEnv }}/{{ .folderID }}/$2
+    nginx.ingress.kubernetes.io/upstream-vhost: {{ .upstreamVhost }}
+    nginx.ingress.kubernetes.io/use-regex: 'true'
+    {{- range $Annotation, $Value := .annotations }}
+    {{ $Annotation }}: {{ $Value | quote  }}
+  {{- end }}
+spec:
+  rules:
+    {{- range .rules.domains }}
+    {{- $host := . }}
+    - host: "{{ $.Values.s3.ingress.domainPrefix }}.{{ $host }}"
+      http:
+        paths:
+          {{- with $.Values.s3.ingress.rules }}
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ .serviceName }}
+                port:
+                  number: {{ .servicePort }}
+          {{- end }}
+          {{- end }}
+    {{- end }}
+  {{- if .tls }}
+  {{- if .tls.enabled }}
+  tls:
+    {{- range .tls.certs }}
+    - secretName: {{ .secretName }}
+      {{- range .domains }}
+      hosts:
+        - {{ . }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,26 @@
+{{- if .Values.prometheus.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/name: {{ include "Common.name" . }}--prometheus
+    app.kubernetes.io/part-of: {{ include "Common.name" . }}
+    app.kubernetes.io/prometheus: enabled
+    release: prometheus
+  name: {{ include "Common.name" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  endpoints:
+    - path: /metrics
+      port: http
+      {{- if .Values.prometheus.enabled }}
+      interval: {{ .Values.prometheus.interval }}
+      {{- end}}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "Common.name" . }}--{{ .Values.api.component }}
+{{- end }}

@@ -1,0 +1,307 @@
+# environment variables
+envs:
+  APP_ENV_NAME: "dev"
+
+#image
+image:
+  separator: /
+  prefix: "foo"
+  version: "bar"
+
+security:
+  enabled: true
+  runAsNonRoot: true
+  user: 1000
+  group: 1000
+strategyType: RollingUpdate
+
+
+# api
+api:
+  #  tolerations:
+  #    - effect: "NoSchedule"
+  #      key: "test"
+  #      operator: "Equal"
+  #      value: "test"
+  component: "api"
+  enabled: true
+  replicaCount: 2
+  #behavior:
+  #  scaleDown:
+  #    stabilizationWindowSeconds: 30
+  #    selectPolicy: Min
+  #    percent:
+  #      value: 100
+  #      periodSeconds: 15
+  #    pods:
+  #      value: 55
+  #      periodSeconds: 25
+  #  scaleUp:
+  #    pods:
+  #      value: 1
+  #      periodSeconds: 10
+  useNodeDns: false
+  http:
+  - podPort: 80
+    containerPort: 8080
+    name: http
+    serviceName: "api"
+  initTimeout: 60
+  revisionHistoryLimit: 0
+  # liveness && readiness probes
+  rollingUpdate:
+    maxSurge: 25%
+    maxUnavailable: 25%
+  probes:
+    enabled: true
+    liveness:
+      path: /
+      initialDelaySeconds: 15
+      periodSeconds: 5
+      timeoutSeconds: 3
+    readiness:
+      path: /
+      initialDelaySeconds: 15
+      periodSeconds: 5
+      timeoutSeconds: 3
+    #startup:
+    #  path: /
+    #  periodSeconds: 5
+    #  timeoutSeconds: 3
+  # resources
+  resources:
+    enabled: true
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  additionContainers:
+    enabled: false
+    name: "addition"
+    probes:
+      enabled: false
+    resources:
+      enabled: true
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    http:
+    - podPort: 80
+      containerPort: 8080
+      name: http
+      serviceName: "addition"
+    volumeMounts: {}
+    configmap: {}
+  initContainers: []
+  #      - name: wait-for-services
+  #        args: ['/usr/bin/hooks/initContainers.sh']
+  # VolumeMounts - mostly for local development
+  volumeMounts: {}
+  #    project: /app
+
+  nodeSelector: {}
+  # nodeLabel: labelValue
+
+  autoscaling:
+    enabled: false
+#    minReplicas: 1
+#    maxReplicas: 5
+#    targetCPUUtilizationPercentage: 80
+#    targetMemoryUtilizationPercentage: 80
+
+configmap: {}
+
+front:
+  #  tolerations:
+  #    - effect: "NoSchedule"
+  #      key: "test"
+  #      operator: "Equal"
+  #      value: "test"
+  component: "front"
+  enabled: false
+  replicaCount: 1
+  useNodeDns: false
+  http:
+  - podPort: 80
+    containerPort: 80
+    name: http
+    serviceName: "front"
+  initTimeout: 60
+  revisionHistoryLimit: 0
+  # liveness && readiness probes
+  probes:
+    enabled: true
+    liveness:
+      path: /
+      initialDelaySeconds: 15
+      periodSeconds: 5
+      timeoutSeconds: 3
+    readiness:
+      path: /
+      initialDelaySeconds: 15
+      periodSeconds: 5
+      timeoutSeconds: 3
+  # resources
+  resources:
+    enabled: true
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  initContainers: []
+  #      - name: wait-for-services
+  #        args: ['/usr/bin/hooks/initContainers.sh']
+  # VolumeMounts - mostly for local development
+  volumeMounts: {}
+  #    project: /app
+
+  nodeSelector: {}
+  # nodeLabel: labelValue
+
+  autoscaling:
+    enabled: false
+    #    minReplicas: 1
+    #    maxReplicas: 5
+    #    targetCPUUtilizationPercentage: 80
+    #    targetMemoryUtilizationPercentage: 80
+
+imagePullSecrets: registry
+
+# workers
+worker:
+  component: "worker"
+  useNodeDns: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 150m
+      memory: 256Mi
+  revisionHistoryLimit: 0
+  initContainers: ~
+
+
+workers:
+#   - name: <Worker name>
+#     replicaCount: <int>
+#     args: <arguments and options passed to "/bin/console">
+#     resources:
+#        limits:
+#          cpu: 250m
+#          memory: 512Mi
+#        requests:
+#          cpu: 100m
+#          memory: 256Mi
+#     nodeSelector: #optional
+#       nodeLabel: labelValue
+
+# cronjobs
+cronJob:
+  component: "cronjob"
+  useNodeDns: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  successfulJobsHistoryLimit: 0
+  initContainers: []
+
+cronJobs: []
+#   - name: <CronJob name>
+#     schedule: '50 */3 * * *'
+#     args: <arguments and options passed to "/bin/console">
+#     resources:
+#       limits:
+#          cpu: 250m
+#          memory: 512Mi
+#       requests:
+#          cpu: 100m
+#          memory: 256Mi
+#     nodeSelector: #optional
+#       nodeLabel: labelValue
+s3:
+  enabled: false
+# ingress
+ingress:
+  forceSslRedirect: false
+  annotations: {}
+  rules:
+    domains:
+    - domain: test.com
+    - domain: test2.com
+    paths:
+    - path: /
+      servicePort: 80
+    - path: /subpath
+      servicePort: 8088
+  tls:
+    enabled: false
+    certs:
+    - secretName: name-of-tls-secret-resource
+      domains:
+      - test.com /Must match any of .Values.ingress.hosts[].domain
+  front:
+    enabled: false
+    forceSslRedirect: false
+    annotations: {}
+    rules:
+      domains:
+      - domain: test.com
+      - domain: test2.com
+      paths:
+      - path: /
+        servicePort: 80
+      - path: /subpath
+        servicePort: 8088
+    tls:
+      enabled: false
+      certs:
+      - secretName: name-of-tls-secret-resource
+        domains:
+        - test.com /Must match any of .Values.ingress.hosts[].domain
+
+volumes: {}
+#  project: '/absolute/local/path'
+
+frontvolumes: {}
+#  project: '/absolute/local/path'
+
+# prometheus
+prometheus:
+  enabled: false
+  interval: 15s
+
+frontprometheus:
+  enabled: false
+  interval: 15s
+
+# alerts
+alerts:
+  enabled: false
+  rules: []
+
+secretEnvs: {}
+#  - name: <<Secret Name>>
+
+secretEnvsGlobal: {}
+#  - name: <<Secret Name>>
+
+# grafana
+grafana:
+  enabled: false
+  dashboards: []
+
+# default pull policy
+imagePullPolicy: IfNotPresent
+
+
+serviceAccount: rtp
+gitlabProjectName: frontend

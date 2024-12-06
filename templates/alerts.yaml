@@ -1,0 +1,36 @@
+{{- if .Values.alerts.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  annotations:
+    meta.helm.sh/release-name: prometheus
+    meta.helm.sh/release-namespace: monitoring
+  labels:
+    app.kubernetes.io/name: {{ include "Common.name" . }}
+    app.kubernetes.io/part-of: {{ include "Common.name" . }}
+    app.kubernetes.io/prometheus: enabled
+    release: prometheus
+    app: prometheus-operator
+  name: {{ include "Common.name" . }}--prometheus-rules--{{ .Release.Namespace }}
+  namespace: monitoring
+spec:
+  groups:
+    - name: {{ include "Common.name" . }}
+      rules:
+        {{- range $Rule := .Values.alerts.rules }}
+        - alert: {{ $Rule.name | replace "{{ENV}}" $.Release.Namespace }}
+          annotations:
+            message: {{ $Rule.message | replace "{{ENV}}" $.Release.Namespace }}
+          expr: {{ $Rule.expr | replace "{{ENV}}" $.Release.Namespace }}
+          for: {{ $Rule.for }}
+          labels:
+            severity: {{ $Rule.severity }}
+            {{- if $Rule.team }}
+            team: {{ $Rule.team }}
+            {{- end }}
+            {{- if $Rule.management }}
+            management: {{ $Rule.management }}
+            {{- end }}
+        {{- end }}
+{{- end }}

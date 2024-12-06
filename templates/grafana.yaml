@@ -1,0 +1,21 @@
+{{- if .Values.grafana.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    meta.helm.sh/release-name: prometheus
+    meta.helm.sh/release-namespace: monitoring
+  labels:
+    app.kubernetes.io/prometheus: enabled
+    app: prometheus-operator-grafana
+    grafana_dashboard: "1"
+    release: prometheus
+  name: {{ include "Common.name" $ }}--grafana--{{ .Release.Namespace }}
+  namespace: monitoring
+data:
+  {{- range $Dashboard := .Values.grafana.dashboards }}
+    {{ $Dashboard.name }}.json: |-
+      {{ $Dashboard.source }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,52 @@
+{{- if and .Values.ingress .Values.api.domain }}
+{{- with .Values.ingress }}
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "Common.name" $ }}--ingress
+  labels:
+    app.kubernetes.io/name: {{ include "Common.name" $ }}--ingress
+    app.kubernetes.io/part-of: {{ include "Common.name" $ }}
+    helm.sh/chart: {{ include "Common.chart" $ }}
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    {{- if .forceSslRedirect }}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- end }}
+    {{- range $Annotation, $Value := .annotations }}
+    {{ $Annotation }}: {{ $Value | quote  }}
+  {{- end }}
+spec:
+  rules:
+    {{- range .rules.domains }}
+    {{- $host := . }}
+    - host: "{{ $.Values.ingress.domainPrefix }}.{{ $host }}"
+      http:
+        paths:
+          {{- with $.Values.ingress.rules }}
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "Common.name" $ }}
+                port:
+                  number: {{ .servicePort }}
+          {{- end }}
+          {{- end }}
+    {{- end }}
+  {{- if .tls }}
+  {{- if .tls.enabled }}
+  tls:
+    {{- range .tls.certs }}
+    - secretName: {{ .secretName }}
+      {{- range .domains }}
+      hosts:
+        - {{ . }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}

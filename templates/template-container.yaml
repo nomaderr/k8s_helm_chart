@@ -1,0 +1,67 @@
+{{- define "template_container" -}}
+{{- if .object.enabled -}}
+image: {{ .object.image}}
+imagePullPolicy: {{ .Values.imagePullPolicy }}
+{{- if .object.lifecycle }}
+lifecycle:
+{{ toYaml .object.lifecycle.hooks | indent 2 }}
+{{- end}}
+env:
+  {{- range $key, $value :=  .Values.envs }}
+  - name: {{ $key }}
+    value: {{ $value | quote }}
+{{- end }}
+ports:
+  {{- range .object.http }}
+  - containerPort: {{ .containerPort }}
+    protocol: TCP
+    name: {{ .name }}
+  {{- end }}
+{{- if .object.probes.enabled }}
+livenessProbe:
+  httpGet:
+    path: {{ .object.probes.liveness.path }}
+    port: http
+  initialDelaySeconds: {{ .object.probes.liveness.initialDelaySeconds }}
+  periodSeconds: {{ .object.probes.liveness.periodSeconds }}
+  timeoutSeconds:  {{ .object.probes.liveness.timeoutSeconds }}
+readinessProbe:
+  httpGet:
+    path: {{ .object.probes.liveness.path }}
+    port: http
+  initialDelaySeconds: {{ .object.probes.readiness.initialDelaySeconds }}
+  periodSeconds: {{ .object.probes.readiness.periodSeconds }}
+  timeoutSeconds: {{ .object.probes.readiness.timeoutSeconds }}
+{{- end}}
+{{- if .object.resources.enabled }}
+resources:
+  {{- if .object.resources.limits }}
+  limits:
+{{ toYaml .object.resources.limits | indent 4 }}
+  {{- end }}
+  {{- if .object.resources.requests }}
+  requests:
+{{ toYaml .object.resources.requests | indent 4 }}
+{{- end }}
+{{- end }}
+{{- if .object.volumeMounts }}
+volumeMounts:
+  {{- range .object.volumeMounts }}
+  - name: {{ printf "%s--%s-config-%s" ( include "Common.name" $ ) ( $.Values.api.component ) ($.object.name) }}
+    mountPath: {{ .mountPath }}
+    readOnly: true
+    subPath: {{ .subPath }}
+  {{- end }}
+{{- end }}
+{{- if or $.Values.secretEnvs $.Values.secretEnvsGlobal }}
+envFrom:
+  {{- range $.Values.secretEnvsGlobal }}
+  - secretRef:
+      name: {{ .name | default "secret" }}
+      optional: {{ .isOptional | default false }}
+  {{- end }}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- $_ := set . "object" (default dict (get .Values "api" )).additionContainers -}}

@@ -1,0 +1,6 @@
+apiVersion: v2
+appVersion: "1.0"
+description: Default chart for applications
+name: application
+version: 1.4.22-rtp
+type: application

@@ -1,0 +1,201 @@
+{{- if .Values.front.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: {{ include "Common.name" . }}--{{ .Values.front.component }}
+    app.kubernetes.io/part-of: {{ include "Common.name" . }}
+    helm.sh/chart: {{ include "Common.chart" . }}-{{ .Values.front.component }}
+    {{- if .Values.prometheus.enabled }}
+    app: prometheus-oper-{{ include "Common.name" . }}--{{ .Values.front.component }}
+    app.kubernetes.io/prometheus: enabled
+    release: prometheus
+    {{- end }}
+    {{- range $Label, $Value := $.Values.labels }}
+    {{ $Label }}: {{ $Value | quote  }}
+    {{- end }}
+  name: {{ include "Common.name" . }}--{{ .Values.front.component }}
+spec:
+  replicas: {{ .Values.front.replicaCount }}
+  revisionHistoryLimit: {{ .Values.front.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "Common.name" . }}--{{ .Values.front.component }}
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "Common.name" . }}--{{ .Values.front.component }}
+        {{- if .Values.prometheus.enabled }}
+        app: prometheus-oper-{{ include "Common.name" . }}--{{ .Values.front.component }}
+        app.kubernetes.io/prometheus: enabled
+        release: prometheus
+        {{- end }}
+        {{- range $Label, $Value := $.Values.labels }}
+        {{ $Label }}: {{ $Value | quote  }}
+        {{- end }}
+    spec:
+      {{- if .Values.front.useNodeDns }}
+      dnsPolicy: "ClusterFirst"
+      {{- end }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecrets }}
+        {{- end }}
+      {{- if .Values.front.nodeSelector }} ## Node Selectors Start
+      nodeSelector:
+        {{- range $key, $value :=  .Values.front.nodeSelector }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+        {{- end }} ## Node Selectors End
+      containers:
+        - name: {{ include "Common.name" . }}--{{ .Values.front.component }}
+          image: "{{ .Values.image.prefix }}{{ .Values.image.separator }}{{ .Values.api.component }}:{{ .Values.image.version }}"
+          {{- if .Values.security.enabled }}
+          securityContext:
+            runAsNonRoot: {{ .Values.security.runAsNonRoot }}
+            runAsUser: {{ .Values.security.user }}
+            runAsGroup: {{ .Values.security.group }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          {{- if .Values.front.lifecycle }}
+          lifecycle:
+          {{ toYaml .Values.front.lifecycle.hooks | indent 12 }}
+          {{- end}}
+          env:
+            {{- range $key, $value :=  .Values.envs }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+          {{- end }}
+          ports:
+            {{- range .Values.front.http }}
+            - containerPort: {{ .containerPort }}
+              protocol: TCP
+              name: {{ .name }}
+            {{- end }}
+          {{- if .Values.front.probes.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.front.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.front.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.front.probes.liveness.periodSeconds }}
+            timeoutSeconds:  {{ .Values.front.probes.liveness.timeoutSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.front.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.front.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.front.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.front.probes.readiness.timeoutSeconds }}
+          {{- end}}
+          {{- if .Values.front.resources.enabled }}
+          resources:
+            {{- if .Values.front.resources.limits }}
+            limits:
+{{ toYaml .Values.front.resources.limits | indent 14 }}
+            {{- end }}
+            {{- if .Values.front.resources.requests }}
+            requests:
+{{ toYaml .Values.front.resources.requests | indent 14 }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.front.volumeMounts }}
+          volumeMounts:
+            {{- range $name, $mountPath := .Values.front.volumeMounts }}
+            - mountPath: {{ $mountPath | quote}}
+              name: {{ $name }}
+            {{- end }}
+            {{- range $path, $subPath := $.Values.front.volumeMounts.configmap }}
+            - name: {{ include "Common.name" . }}--{{ $.Values.front.component }}-config
+              mountPath: {{ $path }}
+              readOnly: true
+              subPath: {{ $subPath }}
+            {{- end }}
+         {{- end }}
+          {{- if or $.Values.secretEnvs $.Values.secretEnvsGlobal }}
+          envFrom:
+            {{- range $.Values.secretEnvsGlobal }}
+            - secretRef:
+                name: {{ .name | default "secret" }}
+                optional: {{ .isOptional | default false }}
+            {{- end }}
+            {{- range $.Values.secretEnvs }}
+            - secretRef:
+                name: {{ include "Common.name" $ }}--{{ .name | default "secret" }}
+                optional: {{ .isOptional | default false }}
+          {{- end }}
+      {{- end }}
+      {{- if  $.Values.front.tolerations }}
+      tolerations:
+{{ toYaml $.Values.front.tolerations | nindent 8 }}
+      {{- end }}
+      ## InitContainers
+      {{- if $.Values.api.initContainers }}
+      initContainers:
+        {{- range $initContainer := $.Values.front.initContainers}}
+        - name: {{ include "Common.name" $ }}--{{ $initContainer.name }}
+          image: "{{ $.Values.image.prefix }}{{ $.Values.image.separator }}{{ $.Values.api.component }}:{{ $.Values.image.version }}"
+          command:
+            - "sh"
+            - "-c"
+          args: {{ $initContainer.args }}
+          env:
+            {{- range $key, $value :=  $.Values.envs }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+
+          {{- if or $.Values.secretEnvs $.Values.secretEnvsGlobal }}
+          envFrom:
+            {{- range $.Values.secretEnvsGlobal }}
+            - secretRef:
+                name: {{ .name | default "secret" }}
+                optional: {{ .isOptional | default false }}
+            {{- end }}
+            {{- range $.Values.secretEnvs }}
+            - secretRef:
+                name: {{ include "Common.name" $ }}--{{ .name | default "secret" }}
+                optional: {{ .isOptional | default false }}
+            {{- end }}
+          {{- end }}
+          {{- if $.Values.front.volumeMounts }}
+          volumeMounts:
+            {{- range $name, $mountPath := $.Values.front.volumeMounts }}
+            - mountPath: {{ $mountPath | quote}}
+              name: {{ $name }}
+              {{- end }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+
+      ## Volumes
+      {{- if .Values.volumes }}
+      volumes:
+        {{- if .Values.volumes.hostPath }}
+        {{- range $name,$hostPath := .Values.volumes }}
+        - name: {{ $name | quote}}
+          hostPath:
+            path: {{ $hostPath | quote}}
+        {{- end}}
+        {{- end }}
+
+        {{- if .Values.volumes.configmap }}
+        - name: {{ include "Common.name" . }}--{{ .Values.front.component }}-config
+          configMap:
+            defaultMode: 0600
+            name: {{ include "Common.name" . }}--{{ .Values.front.component }}-config
+        {{- end }}
+
+        {{- if .Values.volumes.persistence }}
+        - name: {{ .Values.volumes.persistence.volumeName }}-pv-storage
+          persistentVolumeClaim:
+            claimName: {{ .Values.volumes.persistence.volumeName }}-pv-claim
+        {{- end }}
+
+      {{- end }}
+{{- end }}

@@ -1,0 +1,72 @@
+{{- if and .Values.api.enabled .Values.api.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  labels:
+    app.kubernetes.io/name: {{ include "Common.name" . }}--{{ .Values.api.component }}--hpa
+    app.kubernetes.io/part-of: {{ include "Common.name" . }}
+    helm.sh/chart: {{ include "Common.chart" . }}-{{ .Values.api.component }}
+    {{- range $Label, $Value := $.Values.labels }}
+    {{ $Label }}: {{ $Value | quote  }}
+    {{- end }}
+  name: {{ include "Common.name" . }}--{{ .Values.api.component }}--hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "Common.name" . }}--{{ .Values.api.component }}
+  minReplicas: {{ .Values.api.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.api.autoscaling.maxReplicas }}
+  {{- if .Values.api.behavior }}
+  behavior:
+    {{- if .Values.api.behavior.scaleDown }}
+    scaleDown:
+      stabilizationWindowSeconds: {{ .Values.api.behavior.scaleDown.stabilizationWindowSeconds | default 0 }}
+      selectPolicy: {{ .Values.api.behavior.scaleDown.selectPolicy | default "Max" }}
+      policies:
+      {{- if  .Values.api.behavior.scaleDown.percent}}
+      - type: Percent
+        value: {{ .Values.api.behavior.scaleDown.percent.value | default 100 }}
+        periodSeconds: {{ .Values.api.behavior.scaleDown.percent.periodSeconds | default 15 }}
+      {{- end }}
+      {{- if  .Values.api.behavior.scaleDown.pods}}
+      - type: Pods
+        value: {{ .Values.api.behavior.scaleDown.pods.value | default 1 }}
+        periodSeconds: {{ .Values.api.behavior.scaleDown.pods.periodSeconds | default 15 }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.api.behavior.scaleUp }}
+    scaleUp:
+      stabilizationWindowSeconds: {{ .Values.api.behavior.scaleUp.stabilizationWindowSeconds | default 0 }}
+      selectPolicy: {{ .Values.api.behavior.scaleUp.selectPolicy | default "Max" }}
+      policies:
+      {{- if  .Values.api.behavior.scaleUp.percent}}
+      - type: Percent
+        value: {{ .Values.api.behavior.scaleUp.percent.value | default 50 }}
+        periodSeconds: {{ .Values.api.behavior.scaleUp.percent.periodSeconds | default 15 }}
+      {{- end }}
+      {{- if  .Values.api.behavior.scaleUp.pods}}
+      - type: Pods
+        value: {{ .Values.api.behavior.scaleUp.pods.value | default 1 }}
+        periodSeconds: {{ .Values.api.behavior.scaleUp.pods.periodSeconds | default 15 }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  metrics:
+    {{- if .Values.api.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.api.autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
+    {{- if .Values.api.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.api.autoscaling.targetMemoryUtilizationPercentage }}
+  {{- end }}
+{{- end }}

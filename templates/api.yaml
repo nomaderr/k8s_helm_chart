@@ -1,0 +1,233 @@
+{{- if .Values.api.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: {{ include "Common.name" . }}--{{ .Values.api.component }}
+    app.kubernetes.io/part-of: {{ include "Common.name" . }}
+    helm.sh/chart: {{ include "Common.chart" . }}-{{ .Values.api.component }}
+    {{- if .Values.prometheus.enabled }}
+    app: prometheus-oper-{{ include "Common.name" . }}--{{ .Values.api.component }}
+    app.kubernetes.io/prometheus: enabled
+    release: prometheus
+    {{- end }}
+    {{- range $Label, $Value := $.Values.labels }}
+    {{ $Label }}: {{ $Value | quote  }}
+    {{- end }}
+  name: {{ include "Common.name" . }}--{{ .Values.api.component }}
+spec:
+  {{- if not .Values.api.disableReplicaCount }}
+  replicas: {{ .Values.api.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.api.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "Common.name" . }}--{{ .Values.api.component }}
+  strategy:
+    {{- if eq .Values.strategyType "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ if (get .Values.api "rollingUpdate") -}} {{- if (get .Values.api.rollingUpdate "maxSurge") -}} {{- default "25%" .Values.api.rollingUpdate.maxSurge -}} {{- end -}}{{- end }}
+      maxUnavailable: {{ if (get .Values.api "rollingUpdate") -}} {{- if (get .Values.api.rollingUpdate "maxUnavailable") -}} {{- default "25%" .Values.api.rollingUpdate.maxUnavailable -}} {{- end -}}{{- end }}
+    {{- end }}
+    type: {{ .Values.strategyType }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "Common.name" . }}--{{ .Values.api.component }}
+        {{- if .Values.prometheus.enabled }}
+        app: prometheus-oper-{{ include "Common.name" . }}--{{ .Values.api.component }}
+        app.kubernetes.io/prometheus: enabled
+        release: prometheus
+        {{- end }}
+        {{- range $Label, $Value := $.Values.labels }}
+        {{ $Label }}: {{ $Value | quote  }}
+        {{- end }}
+    spec:
+      {{- if .Values.api.serviceAccount}}
+      serviceAccountName: {{ .Values.api.serviceAccount }}
+      {{- end }}
+      {{- if .Values.api.useNodeDns }}
+      dnsPolicy: "ClusterFirst"
+      {{- end }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecrets }}
+        {{- end }}
+      {{- if .Values.api.nodeSelector }} ## Node Selectors Start
+      nodeSelector:
+        {{- range $key, $value :=  .Values.api.nodeSelector }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+        {{- end }} ## Node Selectors End
+      containers:
+        - name: {{ include "Common.name" . }}--{{ .Values.api.component }}
+          image: "{{ .Values.image.prefix }}{{ .Values.image.separator }}{{ .Values.api.component }}:{{ .Values.image.version }}"
+          {{- if .Values.security.enabled }}
+          securityContext:
+            runAsNonRoot: {{ .Values.security.runAsNonRoot }}
+            runAsUser: {{ .Values.security.user }}
+            runAsGroup: {{ .Values.security.group }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          {{- if .Values.api.lifecycle }}
+          lifecycle:
+          {{ toYaml .Values.api.lifecycle.hooks | indent 12 }}
+          {{- end}}
+          env:
+            {{- range $key, $value :=  .Values.envs }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+          {{- end }}
+          ports:
+            {{- range .Values.api.http }}
+            - containerPort: {{ .containerPort }}
+              protocol: TCP
+              name: {{ .name }}
+            {{- end }}
+          {{- if .Values.api.probes.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.api.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.api.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.probes.liveness.periodSeconds }}
+            timeoutSeconds:  {{ .Values.api.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.api.probes.liveness.failureThreshold | default 3 }}
+            successThreshold: {{ .Values.api.probes.liveness.successThreshold | default 1 }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.api.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.api.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.api.probes.readiness.failureThreshold | default 3 }}
+            successThreshold: {{ .Values.api.probes.readiness.successThreshold | default 1 }}
+          {{- if .Values.api.probes.startup }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.api.probes.startup.path }}
+              port: http
+            periodSeconds: {{ .Values.api.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.probes.startup.timeoutSeconds }}
+            failureThreshold: {{ .Values.api.probes.startup.failureThreshold | default 3 }}
+            successThreshold: {{ .Values.api.probes.startup.successThreshold | default 1 }}
+          {{- end }}
+          {{- end}}
+          {{- if .Values.api.resources.enabled }}
+          resources:
+            {{- if .Values.api.resources.limits }}
+            limits:
+{{ toYaml .Values.api.resources.limits | indent 14 }}
+            {{- end }}
+            {{- if .Values.api.resources.requests }}
+            requests:
+{{ toYaml .Values.api.resources.requests | indent 14 }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.api.volumeMounts }}
+          volumeMounts:
+            {{- range $name, $mountPath := .Values.api.volumeMounts }}
+            - mountPath: {{ $mountPath | quote}}
+              name: {{ $name }}
+            {{- end }}
+            {{- range $path, $subPath := $.Values.api.volumeMounts.configmap }}
+            - name: {{ include "Common.name" . }}--{{ $.Values.api.component }}-config
+              mountPath: {{ $path }}
+              readOnly: true
+              subPath: {{ $subPath }}
+            {{- end }}
+         {{- end }}
+          {{- if or $.Values.secretEnvs $.Values.secretEnvsGlobal }}
+          envFrom:
+            {{- range $.Values.secretEnvsGlobal }}
+            - secretRef:
+                name: {{ .name | default "secret" }}
+                optional: {{ .isOptional | default false }}
+            {{- end }}
+            {{- range $.Values.configmapEnvsGlobal }}
+            - configMapRef:
+                name: {{ .name | default "configmap" }}
+            {{- end }}
+            {{- range $.Values.secretEnvs }}
+            - secretRef:
+                name: {{ include "Common.name" $ }}--{{ .name | default "secret" }}
+                optional: {{ .isOptional | default false }}
+          {{- end }}
+      {{- end }}
+      #Include addition containers
+        {{- if .Values.api.additionContainers.enabled }}
+        - name: {{ include "Common.name" . }}--{{ .Values.api.additionContainers.name }}
+          {{- include "template_container" . | nindent 10 -}}
+        {{- end }}
+      {{- if  $.Values.api.tolerations }}
+      tolerations:
+{{ toYaml $.Values.api.tolerations | nindent 8 }}
+      {{- end }}
+      ## InitContainers
+      {{- if $.Values.api.initContainers }}
+      initContainers:
+        {{- range $initContainer := $.Values.api.initContainers}}
+        - name: {{ include "Common.name" $ }}--{{ $initContainer.name }}
+          image: "{{ $.Values.image.prefix }}{{ $.Values.image.separator }}{{ $.Values.api.component }}:{{ $.Values.image.version }}"
+          command:
+            - "sh"
+            - "-c"
+          args: {{ $initContainer.args }}
+          env:
+            {{- range $key, $value :=  $.Values.envs }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+
+          {{- if or $.Values.secretEnvs $.Values.secretEnvsGlobal }}
+          envFrom:
+            {{- range $.Values.secretEnvsGlobal }}
+            - secretRef:
+                name: {{ .name | default "secret" }}
+                optional: {{ .isOptional | default false }}
+            {{- end }}
+            {{- range $.Values.secretEnvs }}
+            - secretRef:
+                name: {{ include "Common.name" $ }}--{{ .name | default "secret" }}
+                optional: {{ .isOptional | default false }}
+            {{- end }}
+          {{- end }}
+          {{- if $.Values.api.volumeMounts }}
+          volumeMounts:
+            {{- range $name, $mountPath := $.Values.api.volumeMounts }}
+            - mountPath: {{ $mountPath | quote}}
+              name: {{ $name }}
+              {{- end }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+      ## Volumes
+      {{- if .Values.volumes }}
+      volumes:
+        {{- if .Values.volumes.hostPath }}
+        {{- range $name,$hostPath := .Values.volumes }}
+        - name: {{ $name | quote}}
+          hostPath:
+            path: {{ $hostPath | quote}}
+        {{- end}}
+        {{- end }}
+        {{- if .Values.volumes.configmap }}
+        - name: {{ include "Common.name" . }}--{{ .Values.api.component }}-config
+          configMap:
+            defaultMode: 0600
+            name: {{ include "Common.name" . }}--{{ .Values.api.component }}-config
+        {{- end }}
+        {{- if .Values.api.additionContainers.configmap }}
+        - name: {{ printf "%s--%s-config-%s" (include "Common.name" . ) ( .Values.api.component ) ( .Values.api.additionContainers.name ) }}
+          configMap:
+            defaultMode: 0600
+            name: {{ printf "%s--%s-config-%s" (include "Common.name" . ) ( .Values.api.component ) ( .Values.api.additionContainers.name ) }}
+        {{- end }}
+        {{- if .Values.volumes.persistence }}
+        - name: {{ .Values.volumes.persistence.volumeName }}-pv-storage
+          persistentVolumeClaim:
+            claimName: {{ .Values.volumes.persistence.volumeName }}-pv-claim
+        {{- end }}
+      {{- end }}
+{{- end }}

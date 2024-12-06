@@ -1,0 +1,28 @@
+{{- define "configmap" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/name: {{ include "Common.name" $ }}--{{ .Values.api.component }}
+    app.kubernetes.io/part-of: {{ include "Common.name" . }}
+    helm.sh/chart: {{ include "Common.chart" . }}-{{ .Values.api.component }}
+  name: {{ .name }}
+data:
+  {{- range $path, $config := .configmapdata }}
+  {{ $path }}: {{ $config | indent 4 -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if .Values.configmap }}
+{{ $_ := set . "configmapdata" .Values.configmap }}
+{{ $_ := set . "name" (printf "%s--%s-config" ( include "Common.name" . ) ( .Values.api.component )) }}
+{{ template "configmap" $ }}
+{{- end }}
+
+---
+{{- $_ := set . "object" (default dict (get $.Values "api" )).additionContainers -}}
+{{- if .object.configmap }}
+{{ $_ := set . "configmapdata" .object.configmap }}
+{{ $_ := set . "name" (printf "%s--%s-config-%s" ( include "Common.name" . ) ( .Values.api.component ) (.object.name)) }}
+{{ template "configmap" $ }}
+{{- end }}

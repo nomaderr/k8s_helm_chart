@@ -1,0 +1,30 @@
+{{- if .Values.front.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "Common.name" . }}--{{ .Values.front.component }}
+  labels:
+    app.kubernetes.io/name: {{ include "Common.name" . }}--{{ .Values.front.component }}
+    app.kubernetes.io/part-of: {{ include "Common.name" . }}
+    helm.sh/chart: {{ include "Common.chart" . }}-{{ .Values.front.component }}
+    {{- if .Values.prometheus.enabled }}
+    app: prometheus-oper-{{ include "Common.name" . }}--{{ .Values.front.component }}
+    app.kubernetes.io/prometheus: enabled
+    release: prometheus
+    {{- end }}
+    {{- range $Label, $Value := $.Values.labels }}
+    {{ $Label }}: {{ $Value | quote  }}
+    {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    {{- range .Values.api.http }}
+    - port: {{ .podPort }}
+      targetPort: {{ .containerPort }}
+      protocol: TCP
+      name: {{ .name }}
+    {{ end }}
+  selector:
+    app.kubernetes.io/name: {{ include "Common.name" . }}--{{ .Values.front.component }}
+{{- end }}
